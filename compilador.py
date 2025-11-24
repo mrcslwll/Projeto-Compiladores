@@ -1,10 +1,26 @@
-import re
+import sys
+
+# ==========================================
+# UTILITÁRIOS DE APRESENTAÇÃO (CORES)
+# ==========================================
+class Cores:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+
+def print_fase(nome):
+    print(f"\n{Cores.HEADER}{'='*40}")
+    print(f" {nome}")
+    print(f"{'='*40}{Cores.ENDC}")
 
 # ==========================================
 # 1. ANÁLISE LÉXICA (O Tokenizador)
 # ==========================================
-# Quebra a string de entrada em uma lista de tokens.
-
 class Token:
     def __init__(self, tipo, valor=None):
         self.tipo = tipo
@@ -20,7 +36,6 @@ class AnalisadorLexico:
         self.caractere_atual = self.texto[self.posicao] if self.texto else None
 
     def avancar(self):
-        """Avança para o próximo caractere no texto de entrada."""
         self.posicao += 1
         if self.posicao < len(self.texto):
             self.caractere_atual = self.texto[self.posicao]
@@ -28,12 +43,10 @@ class AnalisadorLexico:
             self.caractere_atual = None
 
     def pular_espaco_branco(self):
-        """Ignora caracteres de espaço em branco."""
         while self.caractere_atual is not None and self.caractere_atual.isspace():
             self.avancar()
 
     def inteiro(self):
-        """Lê um número inteiro da entrada."""
         resultado = ''
         while self.caractere_atual is not None and self.caractere_atual.isdigit():
             resultado += self.caractere_atual
@@ -41,19 +54,17 @@ class AnalisadorLexico:
         return int(resultado)
 
     def identificador(self):
-        """Lê identificadores e palavras-chave reservadas."""
         resultado = ''
         while self.caractere_atual is not None and self.caractere_atual.isalnum():
             resultado += self.caractere_atual
             self.avancar()
         
-        # Palavras-chave da linguagem
+        # Palavras-chave
         if resultado == 'int': return Token('INT', 'int')
         if resultado == 'print': return Token('PRINT', 'print')
         return Token('ID', resultado)
 
     def obter_proximo_token(self):
-        """Analisa o caractere atual e retorna o próximo token."""
         while self.caractere_atual is not None:
             if self.caractere_atual.isspace():
                 self.pular_espaco_branco()
@@ -63,7 +74,8 @@ class AnalisadorLexico:
                 return Token('INTEIRO', self.inteiro())
 
             if self.caractere_atual.isalpha():
-                return Token('ID', self.identificador().valor)
+                # Retorna exatamente o token criado (INT, PRINT ou ID)
+                return self.identificador()
 
             if self.caractere_atual == '=':
                 self.avancar()
@@ -95,7 +107,6 @@ class AnalisadorLexico:
         return Token('EOF', None)
 
     def tokenizar(self):
-        """Gera uma lista completa de tokens."""
         tokens = []
         while True:
             tok = self.obter_proximo_token()
@@ -104,46 +115,34 @@ class AnalisadorLexico:
                 break
         return tokens
 
-
 # ==========================================
-# 2. ANÁLISE SINTÁTICA (O Construtor de AST)
+# 2. ANÁLISE SINTÁTICA (AST)
 # ==========================================
-# Constrói uma estrutura de árvore a partir dos tokens.
-
 class NoAST: pass
 
 class OperacaoBinaria(NoAST):
     def __init__(self, esquerda, op, direita):
-        self.esquerda = esquerda
-        self.op = op
-        self.direita = direita
+        self.esquerda = esquerda; self.op = op; self.direita = direita
     def __repr__(self): return f"({self.esquerda} {self.op.valor} {self.direita})"
 
 class Numero(NoAST):
-    def __init__(self, token):
-        self.valor = token.valor
+    def __init__(self, token): self.valor = token.valor
     def __repr__(self): return str(self.valor)
 
 class Variavel(NoAST):
-    def __init__(self, token):
-        self.nome = token.valor
+    def __init__(self, token): self.nome = token.valor
     def __repr__(self): return f"Var({self.nome})"
 
 class DeclaracaoVar(NoAST):
-    def __init__(self, no_var, no_tipo):
-        self.no_var = no_var
-        self.no_tipo = no_tipo
+    def __init__(self, no_var, no_tipo): self.no_var = no_var; self.no_tipo = no_tipo
     def __repr__(self): return f"Decl({self.no_var.nome})"
 
 class Atribuicao(NoAST):
-    def __init__(self, esquerda, direita):
-        self.esquerda = esquerda
-        self.direita = direita
+    def __init__(self, esquerda, direita): self.esquerda = esquerda; self.direita = direita
     def __repr__(self): return f"Atrib({self.esquerda.nome} = {self.direita})"
 
 class Impressao(NoAST):
-    def __init__(self, expressao):
-        self.expressao = expressao
+    def __init__(self, expressao): self.expressao = expressao
     def __repr__(self): return f"Imprimir({self.expressao})"
 
 class AnalisadorSintatico:
@@ -153,7 +152,6 @@ class AnalisadorSintatico:
         self.token_atual = self.tokens[self.posicao]
 
     def consumir(self, tipo_token):
-        """Verifica se o token atual é do tipo esperado e avança."""
         if self.token_atual.tipo == tipo_token:
             self.posicao += 1
             if self.posicao < len(self.tokens):
@@ -162,7 +160,6 @@ class AnalisadorSintatico:
             raise Exception(f"Erro Sintático: Esperado {tipo_token}, encontrado {self.token_atual.tipo}")
 
     def fator(self):
-        """Analisa números, variáveis ou expressões entre parênteses."""
         token = self.token_atual
         if token.tipo == 'INTEIRO':
             self.consumir('INTEIRO')
@@ -175,10 +172,9 @@ class AnalisadorSintatico:
             no = self.expressao()
             self.consumir('PARENTESE_DIR')
             return no
-        raise Exception(f"Erro Sintático: Fator inválido encontrado '{token.valor}'")
+        raise Exception(f"Erro Sintático: Fator inválido '{token.valor}'")
 
     def termo(self):
-        """Analisa multiplicação e divisão."""
         no = self.fator()
         while self.token_atual.tipo in ('MULT', 'DIV'):
             token = self.token_atual
@@ -187,7 +183,6 @@ class AnalisadorSintatico:
         return no
 
     def expressao(self):
-        """Analisa adição e subtração."""
         no = self.termo()
         while self.token_atual.tipo in ('MAIS', 'MENOS'):
             token = self.token_atual
@@ -196,7 +191,6 @@ class AnalisadorSintatico:
         return no
 
     def instrucao(self):
-        """Analisa uma única instrução (declaração, impressão ou atribuição)."""
         if self.token_atual.tipo == 'INT':
             self.consumir('INT')
             nome_var = self.token_atual
@@ -220,24 +214,26 @@ class AnalisadorSintatico:
             self.consumir('PONTO_VIRGULA')
             return Atribuicao(var, direita)
         
-        raise Exception(f"Erro Sintático: Instrução desconhecida começando com {self.token_atual}")
+        # Ignora pontos e vírgulas extras (para o modo interativo)
+        elif self.token_atual.tipo == 'PONTO_VIRGULA':
+            self.consumir('PONTO_VIRGULA')
+            return None 
+            
+        raise Exception(f"Erro Sintático: Instrução inválida começando com {self.token_atual}")
 
     def analisar(self):
-        """Executa a análise sintática completa."""
         instrucoes = []
         while self.token_atual.tipo != 'EOF':
-            instrucoes.append(self.instrucao())
+            res = self.instrucao()
+            if res: instrucoes.append(res)
         return instrucoes
 
-
 # ==========================================
-# 3. ANÁLISE SEMÂNTICA (Verificação de Contexto)
+# 3. ANÁLISE SEMÂNTICA
 # ==========================================
-# Verifica declarações de variáveis e tipos usando a Tabela de Símbolos.
-
 class TabelaDeSimbolos:
     def __init__(self):
-        self.simbolos = {} # {nome: tipo}
+        self.simbolos = {} 
 
     def definir(self, nome, tipo):
         if nome in self.simbolos:
@@ -250,8 +246,9 @@ class TabelaDeSimbolos:
         return self.simbolos[nome]
 
 class AnalisadorSemantico:
-    def __init__(self):
-        self.tabela_simbolos = TabelaDeSimbolos()
+    # CORREÇÃO APLICADA: Usa 'is not None' para evitar recriar a tabela se ela estiver vazia
+    def __init__(self, tabela_existente=None):
+        self.tabela_simbolos = tabela_existente if tabela_existente is not None else TabelaDeSimbolos()
 
     def visitar(self, no):
         if isinstance(no, list):
@@ -268,29 +265,18 @@ class AnalisadorSemantico:
             self.visitar(no.direita)
         elif isinstance(no, Variavel):
             self.tabela_simbolos.buscar(no.nome)
-        elif isinstance(no, Numero):
-            pass
-
 
 # ==========================================
-# 4. GERAÇÃO DE CÓDIGO INTERMEDIÁRIO (RI)
+# 4. GERAÇÃO DE CÓDIGO (RI)
 # ==========================================
-# Gera Código de Três Endereços (TAC - Three Address Code)
-
 class InstrucaoTAC:
     def __init__(self, op, arg1, arg2, resultado):
-        self.op = op
-        self.arg1 = arg1
-        self.arg2 = arg2
-        self.resultado = resultado
+        self.op = op; self.arg1 = arg1; self.arg2 = arg2; self.resultado = resultado
     
     def __repr__(self):
-        if self.op == '=':
-            return f"{self.resultado} = {self.arg1}"
-        elif self.op == 'print':
-            return f"print {self.arg1}"
-        else:
-            return f"{self.resultado} = {self.arg1} {self.op} {self.arg2}"
+        if self.op == '=': return f"{self.resultado} = {self.arg1}"
+        elif self.op == 'print': return f"print {self.arg1}"
+        else: return f"{self.resultado} = {self.arg1} {self.op} {self.arg2}"
 
 class GeradorCodigoIntermediario:
     def __init__(self):
@@ -304,75 +290,51 @@ class GeradorCodigoIntermediario:
     def gerar(self, no):
         if isinstance(no, list):
             for stmt in no: self.gerar(stmt)
-        
-        elif isinstance(no, DeclaracaoVar):
-            # Declarações não geram código executável nesta RI simples
-            pass
-
+        elif isinstance(no, DeclaracaoVar): pass
         elif isinstance(no, Atribuicao):
             endereco_val = self.gerar(no.direita)
             self.instrucoes.append(InstrucaoTAC('=', endereco_val, None, no.esquerda.nome))
-
         elif isinstance(no, Impressao):
             endereco_val = self.gerar(no.expressao)
             self.instrucoes.append(InstrucaoTAC('print', endereco_val, None, None))
-
         elif isinstance(no, OperacaoBinaria):
             addr1 = self.gerar(no.esquerda)
             addr2 = self.gerar(no.direita)
             temp = self.novo_temp()
             self.instrucoes.append(InstrucaoTAC(no.op.valor, addr1, addr2, temp))
             return temp
-
-        elif isinstance(no, Numero):
-            return str(no.valor)
-
-        elif isinstance(no, Variavel):
-            return no.nome
+        elif isinstance(no, Numero): return str(no.valor)
+        elif isinstance(no, Variavel): return no.nome
 
 # ==========================================
-# 5. OTIMIZAÇÃO (Dobra de Constantes)
+# 5. OTIMIZADOR
 # ==========================================
-# Simplifica instruções como t1 = 2 + 3 -> t1 = 5
-
 class Otimizador:
     def otimizar(self, instrucoes):
         otimizado = []
-
         for instr in instrucoes:
-            # Tenta simplificar Operações Binárias
             if instr.op in ['+', '-', '*', '/']:
-                # Verifica se argumentos são constantes numéricas
                 arg1_e_const = instr.arg1.isdigit()
                 arg2_e_const = instr.arg2.isdigit()
-                
                 if arg1_e_const and arg2_e_const:
-                    val1 = int(instr.arg1)
-                    val2 = int(instr.arg2)
+                    val1, val2 = int(instr.arg1), int(instr.arg2)
                     res = 0
                     if instr.op == '+': res = val1 + val2
                     elif instr.op == '-': res = val1 - val2
                     elif instr.op == '*': res = val1 * val2
                     elif instr.op == '/': res = int(val1 / val2)
-                    
-                    # Cria uma atribuição direta ao invés da operação matemática
-                    # ex: t1 = 5 ao invés de t1 = 2 + 3
-                    nova_instr = InstrucaoTAC('=', str(res), None, instr.resultado)
-                    otimizado.append(nova_instr)
+                    otimizado.append(InstrucaoTAC('=', str(res), None, instr.resultado))
                     continue
-
             otimizado.append(instr)
         return otimizado
 
-
 # ==========================================
-# 6. GERAÇÃO DE CÓDIGO FINAL (A Máquina Virtual)
+# 6. MÁQUINA VIRTUAL
 # ==========================================
-# Executa as instruções TAC.
-
 class MaquinaVirtual:
-    def __init__(self):
-        self.memoria = {} # Armazena valores das variáveis
+    # CORREÇÃO APLICADA: Usa 'is not None' para garantir persistência da memória
+    def __init__(self, memoria_existente=None):
+        self.memoria = memoria_existente if memoria_existente is not None else {}
 
     def obter_valor(self, arg):
         if arg.isdigit() or (arg.startswith('-') and arg[1:].isdigit()):
@@ -380,16 +342,14 @@ class MaquinaVirtual:
         return self.memoria.get(arg, 0)
 
     def executar(self, instrucoes):
-        print("--- SAÍDA DO PROGRAMA ---")
+        print(f"{Cores.OKGREEN}>>> SAÍDA DO PROGRAMA:{Cores.ENDC}")
         for instr in instrucoes:
             if instr.op == '=':
                 val = self.obter_valor(instr.arg1)
                 self.memoria[instr.resultado] = val
-            
             elif instr.op == 'print':
                 val = self.obter_valor(instr.arg1)
-                print(val)
-            
+                print(f"   {Cores.BOLD}{val}{Cores.ENDC}")
             elif instr.op in ['+', '-', '*', '/']:
                 val1 = self.obter_valor(instr.arg1)
                 val2 = self.obter_valor(instr.arg2)
@@ -400,58 +360,80 @@ class MaquinaVirtual:
                 elif instr.op == '/': res = int(val1 / val2)
                 self.memoria[instr.resultado] = res
 
-
 # ==========================================
-# PROGRAMA PRINCIPAL
+# DRIVERS DE EXECUÇÃO
 # ==========================================
 
-def main():
-    # Código de Exemplo na nossa linguagem MiniCalc
-    codigo_fonte = """
-    int a;
-    a = 10;
-    int b;
-    b = a + 5 * (2 + 3); 
-    print(b);
-    """
-    
-    print(f"Código Fonte:\n{codigo_fonte}\n")
-
+def compilar_e_executar(codigo_fonte, tabela_simbolos=None, memoria=None, verbose=True):
     try:
-        # 1. Análise Léxica
-        lexico = AnalisadorLexico(codigo_fonte)
-        tokens = lexico.tokenizar()
-        # print("Tokens:", tokens) 
-
-        # 2. Análise Sintática
-        sintatico = AnalisadorSintatico(tokens)
-        ast = sintatico.analisar()
-        print("AST (Árvore Sintática) construída com sucesso.")
-
-        # 3. Análise Semântica
-        semantico = AnalisadorSemantico()
+        # Pipeline Completo
+        tokens = AnalisadorLexico(codigo_fonte).tokenizar()
+        ast = AnalisadorSintatico(tokens).analisar()
+        
+        # Se passar tabelas, usa elas (Modo Interativo), senão cria novas (Modo Demo)
+        semantico = AnalisadorSemantico(tabela_simbolos)
         semantico.visitar(ast)
-        print("Verificações Semânticas passaram com sucesso.")
-
-        # 4. Geração de RI (Código Intermediário)
+        
         gerador_ri = GeradorCodigoIntermediario()
         gerador_ri.gerar(ast)
-        print("\nRI Gerada (Código de Três Endereços):")
-        for i in gerador_ri.instrucoes: print(i)
-
-        # 5. Otimização
+        
         otimizador = Otimizador()
         instrucoes_otimizadas = otimizador.otimizar(gerador_ri.instrucoes)
-        print("\nRI Otimizada (Dobra de Constantes):")
-        for i in instrucoes_otimizadas: print(i)
-
-        # 6. Execução
-        print("\nExecutando...")
-        vm = MaquinaVirtual()
+        
+        if verbose:
+            print(f"{Cores.OKCYAN}[1] Tokens: {len(tokens)} gerados.{Cores.ENDC}")
+            print(f"{Cores.OKCYAN}[2] AST: Estrutura montada.{Cores.ENDC}")
+            print(f"{Cores.OKCYAN}[3] Semântica: Verificação OK.{Cores.ENDC}")
+            print(f"{Cores.OKCYAN}[4] Otimização: {len(gerador_ri.instrucoes)} instr -> {len(instrucoes_otimizadas)} instr.{Cores.ENDC}")
+        
+        vm = MaquinaVirtual(memoria)
         vm.executar(instrucoes_otimizadas)
-
+        
+        return True
     except Exception as e:
-        print(f"Erro de Compilação: {e}")
+        print(f"{Cores.FAIL}Erro: {e}{Cores.ENDC}")
+        return False
+
+def modo_interativo():
+    print_fase("MODO INTERATIVO (Digite 'sair' para encerrar)")
+    print("Exemplos: 'int a;', 'a = 10;', 'print(a);'")
+    
+    # Persistência de estado
+    tabela_global = TabelaDeSimbolos()
+    memoria_global = {}
+    
+    while True:
+        try:
+            entrada = input(f"{Cores.OKBLUE}MiniCalc > {Cores.ENDC}")
+            if entrada.lower() in ['sair', 'exit']: break
+            if not entrada.strip(): continue
+            
+            # Compila a linha mantendo o histórico de variáveis
+            compilar_e_executar(entrada, tabela_global, memoria_global, verbose=False)
+            
+        except KeyboardInterrupt:
+            break
+
+def main():
+    print(f"{Cores.HEADER}COMPILADOR MINICALC 2.0{Cores.ENDC}")
+    print("1. Executar Demonstração Completa")
+    print("2. Abrir Modo Interativo (Shell)")
+    
+    escolha = input("Escolha uma opção (1 ou 2): ")
+    
+    if escolha == '2':
+        modo_interativo()
+    else:
+        print_fase("DEMONSTRAÇÃO AUTOMÁTICA")
+        codigo_demo = """
+        int x;
+        x = 10;
+        int y;
+        y = x + 5 * (2 + 3); 
+        print(y);
+        """
+        print(f"Código Fonte:{Cores.WARNING}{codigo_demo}{Cores.ENDC}")
+        compilar_e_executar(codigo_demo)
 
 if __name__ == "__main__":
     main()
